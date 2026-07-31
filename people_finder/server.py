@@ -52,6 +52,11 @@ INDEX_HTML = """
         <h2>Add person</h2>
         <form id="add-form">
           <label>Name *</label><input name="name" required />
+          <label>Type</label>
+          <select name="entity_type" style="width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 1px solid #344058; background: #0d111a; color: #f8fafc;">
+            <option value="person">Person</option>
+            <option value="company">Company / företag</option>
+          </select>
           <label>Role</label><input name="role" />
           <label>Organization</label><input name="organization" />
           <label>City</label><input name="city" />
@@ -70,7 +75,7 @@ INDEX_HTML = """
 
       <section class="card">
         <h2>Import CSV</h2>
-        <p class="subtle">Paste CSV with columns like: name, role, organization, city, country, email, phone, profile_url, source, notes, tags, consent_basis.</p>
+        <p class="subtle">Paste CSV with columns like: entity_type, name, role, organization, city, country, email, phone, profile_url, source, notes, tags, consent_basis.</p>
         <textarea id="csv-text" placeholder="name,role,organization,city&#10;Ada Lovelace,Researcher,Example Lab,Stockholm"></textarea>
         <button id="import-button">Import</button>
         <p id="import-status"></p>
@@ -104,7 +109,7 @@ INDEX_HTML = """
       const records = await response.json();
       const rows = records.map(record => `
         <tr>
-          <td>${escapeHtml(record.name)}<br><span class="subtle">${escapeHtml(record.tags)}</span></td>
+          <td>${escapeHtml(record.name)}<br><span class="subtle">${escapeHtml(record.entity_type)} · ${escapeHtml(record.tags)}</span></td>
           <td>${escapeHtml(record.role)}<br><span class="subtle">${escapeHtml(record.organization)}</span></td>
           <td>${escapeHtml([record.city, record.country].filter(Boolean).join(', '))}</td>
           <td>${escapeHtml(record.email)}<br>${escapeHtml(record.phone)}</td>

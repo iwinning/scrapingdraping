@@ -1,15 +1,15 @@
 # People Finder
 
-A privacy-first personal research tool for collecting people/contact records from sources you are allowed to use, searching them locally, and exporting the results as CSV or PDF.
+A privacy-first personal research tool for collecting people, company, and contact records from sources you are allowed to use, searching them locally, and exporting the results as CSV or PDF.
 
-This project intentionally does **not** include scrapers for private-person directory sites such as Mrkoll, Hitta person search, or Eniro person listings. Those sites can involve personal data, terms-of-service limits, and GDPR/privacy risks. The starter app is designed for consented sources, your own notes, CSV imports, public professional profiles, and datasets you have permission to process.
+This project is designed for consented sources, your own notes, CSV imports, public professional profiles, company records, and datasets you have permission to process. Eniro, Hitta, and Mrkoll URLs can be stored for company records by setting `entity_type` to `company`; private-person directory records remain blocked by default.
 
 ## Features
 
 - Local SQLite database
 - Simple browser UI
 - Command-line interface
-- Add/search people records
+- Add/search people and company records
 - Import records from CSV
 - Export filtered results as `.csv`
 - Export filtered results as `.pdf`
@@ -32,7 +32,13 @@ http://127.0.0.1:8765
 Add a record:
 
 ```powershell
-python -m people_finder add --name "Ada Lovelace" --role "Researcher" --organization "Example Lab" --city "Stockholm" --source "manual" --notes "Met at event; consented to follow-up."
+python -m people_finder add --entity-type person --name "Ada Lovelace" --role "Researcher" --organization "Example Lab" --city "Stockholm" --source "manual" --notes "Met at event; consented to follow-up."
+```
+
+Add a company record from a directory URL:
+
+```powershell
+python -m people_finder add --entity-type company --name "Example AB" --city "Stockholm" --profile-url "https://www.eniro.se/example/f%C3%B6retag" --source "Eniro"
 ```
 
 Search:
@@ -59,7 +65,7 @@ python -m people_finder export --format pdf --output .\people.pdf
 The importer accepts these columns:
 
 ```text
-name, role, organization, city, ZIP ocde, country, email, phone, profile_url, source, notes, tags, consent_basis
+entity_type, name, role, organization, city, country, email, phone, profile_url, source, notes, tags, consent_basis
 ```
 
 Extra columns are ignored. Missing columns are treated as blank.
@@ -72,12 +78,9 @@ Use this for:
 - Your own manually collected notes
 - Public professional or organizational pages where collection is allowed
 - Small, respectful research tasks with clear purpose
-- Bulk scraping private individuals
-- Collecting personal addresses
+- Company directory entries that you are allowed to collect or import
 
-
-
-
+The app keeps source and consent/lawful-basis fields visible so exported CSV/PDF files remain easy to review later.
 
 ## GitHub / Codex connection notes
 

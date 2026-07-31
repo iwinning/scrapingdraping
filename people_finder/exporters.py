@@ -32,6 +32,7 @@ def export_pdf_bytes(records: list[PersonRecord], title: str = "People Finder Ex
         lines.extend(
             [
                 f"{index}. {record.name}",
+                f"   Type: {record.entity_type or '-'}",
                 f"   Role: {record.role or '-'}",
                 f"   Organization: {record.organization or '-'}",
                 f"   Location: {', '.join(part for part in [record.city, record.country] if part) or '-'}",

@@ -11,6 +11,7 @@ from .policy import validate_source_url
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS people (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entity_type TEXT NOT NULL DEFAULT 'person',
     name TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT '',
     organization TEXT NOT NULL DEFAULT '',
@@ -46,9 +47,12 @@ class PeopleStore:
     def _initialize(self) -> None:
         with self._connect() as connection:
             connection.executescript(SCHEMA)
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(people)").fetchall()}
+            if "entity_type" not in columns:
+                connection.execute("ALTER TABLE people ADD COLUMN entity_type TEXT NOT NULL DEFAULT 'person'")
 
     def add(self, record: PersonRecord) -> int:
-        policy = validate_source_url(record.profile_url)
+        policy = validate_source_url(record.profile_url, record.entity_type)
         if not policy.allowed:
             raise ValueError(policy.message)
         if not record.name.strip():
@@ -67,7 +71,7 @@ class PeopleStore:
         count = 0
         with self._connect() as connection:
             for record in records:
-                policy = validate_source_url(record.profile_url)
+                policy = validate_source_url(record.profile_url, record.entity_type)
                 if not policy.allowed:
                     raise ValueError(policy.message)
                 if not record.name.strip():
@@ -86,6 +90,7 @@ class PeopleStore:
             needle = f"%{query.strip()}%"
             where = """
             WHERE name LIKE ?
+               OR entity_type LIKE ?
                OR role LIKE ?
                OR organization LIKE ?
                OR city LIKE ?
@@ -98,7 +103,7 @@ class PeopleStore:
                OR tags LIKE ?
                OR consent_basis LIKE ?
             """
-            params = [needle] * 12 + [limit]
+            params = [needle] * 13 + [limit]
         else:
             where = ""
             params = [limit]

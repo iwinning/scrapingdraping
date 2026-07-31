@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from urllib.parse import urlparse
 
 
-BLOCKED_PRIVATE_DIRECTORY_DOMAINS = {
+BUSINESS_DIRECTORY_DOMAINS = {
     "mrkoll.se",
     "www.mrkoll.se",
     "hitta.se",
@@ -35,16 +35,16 @@ class PolicyResult:
     message: str = ""
 
 
-def validate_source_url(url: str) -> PolicyResult:
+def validate_source_url(url: str, entity_type: str = "person") -> PolicyResult:
     if not url:
         return PolicyResult(True)
 
     parsed = urlparse(url)
     domain = parsed.netloc.lower().removeprefix("www.")
-    if domain in {item.removeprefix("www.") for item in BLOCKED_PRIVATE_DIRECTORY_DOMAINS}:
+    if domain in {item.removeprefix("www.") for item in BUSINESS_DIRECTORY_DOMAINS} and entity_type != "company":
         return PolicyResult(
             False,
-            "This starter blocks private-person directory targets by default. Use consented/public-professional sources instead.",
+            "Directory URLs from Eniro, Hitta, and Mrkoll are allowed only for company records. Set entity_type=company for business listings.",
         )
     return PolicyResult(True)
 
