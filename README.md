@@ -72,6 +72,15 @@ The Firecrawl connector is company-only in this starter. Use it for sources and 
 
 You can also add the Firecrawl API key directly in the web UI. The key is stored in your browser's localStorage and is not committed to GitHub or saved in the SQLite database.
 
+In the web UI, the Firecrawl company search panel supports:
+
+- API key entry in the browser
+- keywords, bransch/industry, ort/city, and postnummer/ZIP
+- comma-separated domain filters such as `eniro.se, hitta.se`
+- result preview before import
+- checkbox selection for exactly which companies to import
+- duplicate skipping during imports
+
 ## CSV columns
 
 The importer accepts these columns:

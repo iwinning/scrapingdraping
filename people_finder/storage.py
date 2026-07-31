@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
@@ -31,7 +32,15 @@ CREATE TABLE IF NOT EXISTS people (
 CREATE INDEX IF NOT EXISTS idx_people_name ON people(name);
 CREATE INDEX IF NOT EXISTS idx_people_city ON people(city);
 CREATE INDEX IF NOT EXISTS idx_people_org ON people(organization);
+CREATE INDEX IF NOT EXISTS idx_people_url ON people(profile_url);
 """
+
+
+@dataclass(slots=True)
+class AddManySummary:
+    imported: int = 0
+    skipped_duplicates: int = 0
+    skipped_empty: int = 0
 
 
 class PeopleStore:
@@ -71,21 +80,34 @@ class PeopleStore:
             return int(cursor.lastrowid)
 
     def add_many(self, records: Iterable[PersonRecord]) -> int:
+        return self.add_many_with_summary(records).imported
+
+    def add_many_with_summary(self, records: Iterable[PersonRecord]) -> AddManySummary:
+        summary = AddManySummary()
+        seen_batch: set[tuple[str, ...]] = set()
+        prepared_records = list(records)
         count = 0
         with self._connect() as connection:
-            for record in records:
+            for record in prepared_records:
                 policy = validate_source_url(record.profile_url, record.entity_type)
                 if not policy.allowed:
                     raise ValueError(policy.message)
                 if not record.name.strip():
+                    summary.skipped_empty += 1
                     continue
+                fingerprint = self._fingerprint(record)
+                if fingerprint in seen_batch or self._exists(connection, record):
+                    summary.skipped_duplicates += 1
+                    continue
+                seen_batch.add(fingerprint)
                 columns = PERSON_FIELDS + ["collected_at"]
                 values = [getattr(record, column) for column in columns]
                 placeholders = ", ".join("?" for _ in columns)
                 sql = f"INSERT INTO people ({', '.join(columns)}) VALUES ({placeholders})"
                 connection.execute(sql, values)
                 count += 1
-        return count
+        summary.imported = count
+        return summary
 
     def search(self, query: str = "", limit: int = 1000) -> list[PersonRecord]:
         limit = max(1, min(int(limit), 5000))
@@ -116,3 +138,36 @@ class PeopleStore:
         with self._connect() as connection:
             rows = connection.execute(sql, params).fetchall()
         return [PersonRecord.from_mapping(dict(row)) for row in rows]
+
+    def _exists(self, connection: sqlite3.Connection, record: PersonRecord) -> bool:
+        if record.profile_url.strip():
+            row = connection.execute(
+                "SELECT 1 FROM people WHERE lower(profile_url) = lower(?) LIMIT 1",
+                [record.profile_url.strip()],
+            ).fetchone()
+            if row:
+                return True
+
+        row = connection.execute(
+            """
+            SELECT 1 FROM people
+            WHERE lower(entity_type) = lower(?)
+              AND lower(name) = lower(?)
+              AND lower(zip_code) = lower(?)
+              AND lower(city) = lower(?)
+            LIMIT 1
+            """,
+            [record.entity_type.strip(), record.name.strip(), record.zip_code.strip(), record.city.strip()],
+        ).fetchone()
+        return row is not None
+
+    def _fingerprint(self, record: PersonRecord) -> tuple[str, ...]:
+        if record.profile_url.strip():
+            return ("url", record.profile_url.strip().lower())
+        return (
+            "identity",
+            record.entity_type.strip().lower(),
+            record.name.strip().lower(),
+            record.zip_code.strip().lower(),
+            record.city.strip().lower(),
+        )

@@ -98,15 +98,23 @@ INDEX_HTML = """
           <p id="firecrawl-key-status" class="subtle"></p>
         </div>
         <div>
-          <label>Search query</label>
-          <input id="firecrawl-query" placeholder="redovisningsbyra Stockholm foretag" />
+          <label>Keywords</label>
+          <input id="firecrawl-query" placeholder="redovisningsbyra, tandlakare, restaurang..." />
+          <label>Bransch / industry</label>
+          <input id="firecrawl-industry" placeholder="redovisningsbyra" />
+          <label>Ort / city</label>
+          <input id="firecrawl-city" placeholder="Stockholm" />
+          <label>Postnummer / ZIP</label>
+          <input id="firecrawl-zip-code" placeholder="111 22" />
           <label>Domains, comma separated</label>
           <input id="firecrawl-domains" placeholder="eniro.se, hitta.se" />
           <label>Max results</label>
           <input id="firecrawl-limit" type="number" min="1" max="25" value="10" />
           <div class="row">
             <button id="firecrawl-preview" class="secondary">Preview</button>
-            <button id="firecrawl-import">Import results</button>
+            <button id="select-all-firecrawl" class="secondary">Select all</button>
+            <button id="clear-firecrawl-selection" class="secondary">Clear selection</button>
+            <button id="firecrawl-import">Import selected</button>
           </div>
           <p id="firecrawl-status"></p>
         </div>
@@ -128,6 +136,7 @@ INDEX_HTML = """
   <script>
     const fields = %FIELDS%;
     const firecrawlKeyStorageName = 'people_finder_firecrawl_api_key';
+    let firecrawlPreviewRecords = [];
 
     function escapeHtml(value) {
       return String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
@@ -158,21 +167,41 @@ INDEX_HTML = """
       `;
     }
 
-    function getFirecrawlPayload(importResults = false) {
+    function buildFirecrawlQuery() {
+      return [
+        document.getElementById('firecrawl-query').value.trim(),
+        document.getElementById('firecrawl-industry').value.trim(),
+        document.getElementById('firecrawl-zip-code').value.trim(),
+        document.getElementById('firecrawl-city').value.trim(),
+        'foretag',
+      ].filter(Boolean).join(' ');
+    }
+
+    function getFirecrawlPayload() {
       const apiKey = document.getElementById('firecrawl-api-key').value.trim();
-      const query = document.getElementById('firecrawl-query').value.trim();
       const domains = document.getElementById('firecrawl-domains').value
         .split(',')
         .map(domain => domain.trim())
         .filter(Boolean);
       const limit = Number(document.getElementById('firecrawl-limit').value || 10);
-      return { api_key: apiKey, query, include_domains: domains, limit, import_results: importResults };
+      return {
+        api_key: apiKey,
+        query: buildFirecrawlQuery(),
+        include_domains: domains,
+        limit,
+        city: document.getElementById('firecrawl-city').value.trim(),
+        zip_code: document.getElementById('firecrawl-zip-code').value.trim(),
+        industry: document.getElementById('firecrawl-industry').value.trim(),
+      };
     }
 
     function renderFirecrawlResults(records) {
-      const rows = records.map(record => `
+      firecrawlPreviewRecords = records;
+      const rows = records.map((record, index) => `
         <tr>
+          <td><input type="checkbox" class="firecrawl-select" data-index="${index}" checked /></td>
           <td>${escapeHtml(record.name)}</td>
+          <td>${escapeHtml([record.zip_code, record.city].filter(Boolean).join(' '))}</td>
           <td>${record.profile_url ? `<a href="${escapeHtml(record.profile_url)}" target="_blank">${escapeHtml(record.profile_url)}</a>` : ''}</td>
           <td>${escapeHtml(record.notes || '')}</td>
         </tr>
@@ -180,30 +209,56 @@ INDEX_HTML = """
       document.getElementById('firecrawl-results').innerHTML = `
         <p class="subtle">${records.length} Firecrawl result(s)</p>
         <table>
-          <thead><tr><th>Name</th><th>URL</th><th>Description</th></tr></thead>
-          <tbody>${rows || '<tr><td colspan="3">No Firecrawl results yet.</td></tr>'}</tbody>
+          <thead><tr><th>Import</th><th>Name</th><th>Location</th><th>URL</th><th>Description</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="5">No Firecrawl results yet.</td></tr>'}</tbody>
         </table>
       `;
     }
 
-    async function runFirecrawl(importResults = false) {
+    function selectedFirecrawlRecords() {
+      return Array.from(document.querySelectorAll('.firecrawl-select:checked'))
+        .map(input => firecrawlPreviewRecords[Number(input.dataset.index)])
+        .filter(Boolean);
+    }
+
+    async function previewFirecrawl() {
       const status = document.getElementById('firecrawl-status');
       status.className = 'subtle';
-      status.textContent = importResults ? 'Importing from Firecrawl...' : 'Searching Firecrawl...';
+      status.textContent = 'Searching Firecrawl...';
       const response = await fetch('/api/firecrawl-search', {
         method: 'POST',
         headers: {'content-type': 'application/json'},
-        body: JSON.stringify(getFirecrawlPayload(importResults)),
+        body: JSON.stringify(getFirecrawlPayload()),
+      });
+      const body = await response.json();
+      status.className = response.ok ? 'ok' : 'error';
+      status.textContent = response.ok ? `Previewed ${body.records.length} result(s).` : body.error;
+      if (response.ok) {
+        renderFirecrawlResults(body.records || []);
+      }
+    }
+
+    async function importSelectedFirecrawl() {
+      const selected = selectedFirecrawlRecords();
+      const status = document.getElementById('firecrawl-status');
+      if (!selected.length) {
+        status.className = 'error';
+        status.textContent = 'Select at least one result to import.';
+        return;
+      }
+      status.className = 'subtle';
+      status.textContent = 'Importing selected company records...';
+      const response = await fetch('/api/import-records', {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify({ records: selected }),
       });
       const body = await response.json();
       status.className = response.ok ? 'ok' : 'error';
       status.textContent = response.ok
-        ? (importResults ? `Imported ${body.count} company record(s).` : `Previewed ${body.records.length} result(s).`)
+        ? `Imported ${body.imported}; skipped ${body.skipped_duplicates} duplicate(s).`
         : body.error;
-      if (response.ok) {
-        renderFirecrawlResults(body.records || []);
-        if (importResults) loadRecords();
-      }
+      if (response.ok) loadRecords();
     }
 
     document.getElementById('add-form').addEventListener('submit', async event => {
@@ -227,7 +282,9 @@ INDEX_HTML = """
       const response = await fetch('/api/import-csv', { method: 'POST', headers: {'content-type': 'text/csv'}, body: document.getElementById('csv-text').value });
       const body = await response.json();
       status.className = response.ok ? 'ok' : 'error';
-      status.textContent = response.ok ? `Imported ${body.count} record(s)` : body.error;
+      status.textContent = response.ok
+        ? `Imported ${body.imported ?? body.count} record(s); skipped ${body.skipped_duplicates || 0} duplicate(s).`
+        : body.error;
       if (response.ok) loadRecords();
     });
 
@@ -241,8 +298,14 @@ INDEX_HTML = """
       document.getElementById('firecrawl-api-key').value = '';
       document.getElementById('firecrawl-key-status').textContent = 'Cleared from this browser.';
     });
-    document.getElementById('firecrawl-preview').addEventListener('click', () => runFirecrawl(false));
-    document.getElementById('firecrawl-import').addEventListener('click', () => runFirecrawl(true));
+    document.getElementById('firecrawl-preview').addEventListener('click', previewFirecrawl);
+    document.getElementById('firecrawl-import').addEventListener('click', importSelectedFirecrawl);
+    document.getElementById('select-all-firecrawl').addEventListener('click', () => {
+      document.querySelectorAll('.firecrawl-select').forEach(input => input.checked = true);
+    });
+    document.getElementById('clear-firecrawl-selection').addEventListener('click', () => {
+      document.querySelectorAll('.firecrawl-select').forEach(input => input.checked = false);
+    });
 
     document.getElementById('search-button').addEventListener('click', loadRecords);
     document.getElementById('query').addEventListener('keydown', event => {
@@ -303,26 +366,56 @@ class PeopleFinderHandler(BaseHTTPRequestHandler):
             if self.path == "/api/import-csv":
                 csv_text = self._read_body().decode("utf-8-sig")
                 records = records_from_csv_text(csv_text)
-                count = self.store.add_many(records)
-                self._send_json({"count": count}, status=HTTPStatus.CREATED)
+                summary = self.store.add_many_with_summary(records)
+                self._send_json(
+                    {
+                        "count": summary.imported,
+                        "imported": summary.imported,
+                        "skipped_duplicates": summary.skipped_duplicates,
+                        "skipped_empty": summary.skipped_empty,
+                    },
+                    status=HTTPStatus.CREATED,
+                )
+                return
+
+            if self.path == "/api/import-records":
+                payload = json.loads(self._read_body().decode("utf-8"))
+                records = [PersonRecord.from_mapping(record) for record in payload.get("records", [])]
+                summary = self.store.add_many_with_summary(records)
+                self._send_json(
+                    {
+                        "imported": summary.imported,
+                        "skipped_duplicates": summary.skipped_duplicates,
+                        "skipped_empty": summary.skipped_empty,
+                    },
+                    status=HTTPStatus.CREATED,
+                )
                 return
 
             if self.path == "/api/firecrawl-search":
                 payload = json.loads(self._read_body().decode("utf-8"))
                 include_domains = payload.get("include_domains") or []
                 validate_firecrawl_import("company", include_domains)
+                city = str(payload.get("city") or "").strip()
+                zip_code = str(payload.get("zip_code") or "").strip()
+                industry = str(payload.get("industry") or "").strip()
                 results = search_firecrawl(
                     str(payload.get("query") or ""),
                     limit=int(payload.get("limit") or 10),
                     include_domains=include_domains,
                     api_key=str(payload.get("api_key") or "") or None,
                 )
-                records = [result.to_company_record().as_dict() for result in results]
-                if payload.get("import_results"):
-                    count = self.store.add_many([PersonRecord.from_mapping(record) for record in records])
-                    self._send_json({"count": count, "records": records}, status=HTTPStatus.CREATED)
-                else:
-                    self._send_json({"records": records})
+                records = []
+                for result in results:
+                    record = result.to_company_record()
+                    record.city = city
+                    record.zip_code = zip_code
+                    if industry:
+                        record.organization = industry
+                        record.tags = f"{record.tags},{industry}".strip(",")
+                    record.consent_basis = "company/public web search"
+                    records.append(record.as_dict())
+                self._send_json({"records": records})
                 return
 
             self.send_error(HTTPStatus.NOT_FOUND)
