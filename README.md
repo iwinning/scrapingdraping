@@ -70,6 +70,8 @@ python -m people_finder firecrawl-search --query "redovisningsbyr√• Stockholm f√
 
 The Firecrawl connector is company-only in this starter. Use it for sources and domains where you have permission to search/import data.
 
+You can also add the Firecrawl API key directly in the web UI. The key is stored in your browser's localStorage and is not committed to GitHub or saved in the SQLite database.
+
 ## CSV columns
 
 The importer accepts these columns:

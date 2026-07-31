@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .exporters import export_csv_text, export_pdf_bytes
+from .firecrawl_client import search_firecrawl, validate_firecrawl_import
 from .importers import records_from_csv_text
 from .models import PERSON_FIELDS, PersonRecord
 from .storage import PeopleStore
@@ -28,7 +29,7 @@ INDEX_HTML = """
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
     .card { background: #171b25; border: 1px solid #2a3142; border-radius: 18px; padding: 18px; box-shadow: 0 16px 60px #0004; }
     label { display: block; margin: 10px 0 4px; color: #c9d4ea; font-size: 13px; }
-    input, textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 1px solid #344058; background: #0d111a; color: #f8fafc; }
+    input, textarea, select { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 1px solid #344058; background: #0d111a; color: #f8fafc; }
     textarea { min-height: 130px; resize: vertical; }
     button, .button { display: inline-block; border: 0; border-radius: 999px; padding: 10px 14px; margin-top: 12px; background: #8b5cf6; color: white; cursor: pointer; text-decoration: none; font-weight: 650; }
     button.secondary, .button.secondary { background: #293244; }
@@ -53,7 +54,7 @@ INDEX_HTML = """
         <form id="add-form">
           <label>Name *</label><input name="name" required />
           <label>Type</label>
-          <select name="entity_type" style="width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 1px solid #344058; background: #0d111a; color: #f8fafc;">
+          <select name="entity_type">
             <option value="person">Person</option>
             <option value="company">Company / företag</option>
           </select>
@@ -84,6 +85,36 @@ INDEX_HTML = """
     </div>
 
     <section class="card" style="margin-top: 16px;">
+      <h2>Firecrawl company search</h2>
+      <p class="subtle">Paste your Firecrawl API key here when you have it. It is saved only in this browser, not in the repo or database.</p>
+      <div class="grid">
+        <div>
+          <label>Firecrawl API key</label>
+          <input id="firecrawl-api-key" type="password" placeholder="fc-YOUR-API-KEY" autocomplete="off" />
+          <div class="row">
+            <button id="save-firecrawl-key" class="secondary">Save key on this browser</button>
+            <button id="clear-firecrawl-key" class="secondary">Clear key</button>
+          </div>
+          <p id="firecrawl-key-status" class="subtle"></p>
+        </div>
+        <div>
+          <label>Search query</label>
+          <input id="firecrawl-query" placeholder="redovisningsbyra Stockholm foretag" />
+          <label>Domains, comma separated</label>
+          <input id="firecrawl-domains" placeholder="eniro.se, hitta.se" />
+          <label>Max results</label>
+          <input id="firecrawl-limit" type="number" min="1" max="25" value="10" />
+          <div class="row">
+            <button id="firecrawl-preview" class="secondary">Preview</button>
+            <button id="firecrawl-import">Import results</button>
+          </div>
+          <p id="firecrawl-status"></p>
+        </div>
+      </div>
+      <div id="firecrawl-results"></div>
+    </section>
+
+    <section class="card" style="margin-top: 16px;">
       <h2>Search & export</h2>
       <div class="row">
         <input id="query" placeholder="Search name, city, org, notes..." style="max-width: 420px;" />
@@ -96,6 +127,7 @@ INDEX_HTML = """
   </main>
   <script>
     const fields = %FIELDS%;
+    const firecrawlKeyStorageName = 'people_finder_firecrawl_api_key';
 
     function escapeHtml(value) {
       return String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
@@ -126,6 +158,54 @@ INDEX_HTML = """
       `;
     }
 
+    function getFirecrawlPayload(importResults = false) {
+      const apiKey = document.getElementById('firecrawl-api-key').value.trim();
+      const query = document.getElementById('firecrawl-query').value.trim();
+      const domains = document.getElementById('firecrawl-domains').value
+        .split(',')
+        .map(domain => domain.trim())
+        .filter(Boolean);
+      const limit = Number(document.getElementById('firecrawl-limit').value || 10);
+      return { api_key: apiKey, query, include_domains: domains, limit, import_results: importResults };
+    }
+
+    function renderFirecrawlResults(records) {
+      const rows = records.map(record => `
+        <tr>
+          <td>${escapeHtml(record.name)}</td>
+          <td>${record.profile_url ? `<a href="${escapeHtml(record.profile_url)}" target="_blank">${escapeHtml(record.profile_url)}</a>` : ''}</td>
+          <td>${escapeHtml(record.notes || '')}</td>
+        </tr>
+      `).join('');
+      document.getElementById('firecrawl-results').innerHTML = `
+        <p class="subtle">${records.length} Firecrawl result(s)</p>
+        <table>
+          <thead><tr><th>Name</th><th>URL</th><th>Description</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="3">No Firecrawl results yet.</td></tr>'}</tbody>
+        </table>
+      `;
+    }
+
+    async function runFirecrawl(importResults = false) {
+      const status = document.getElementById('firecrawl-status');
+      status.className = 'subtle';
+      status.textContent = importResults ? 'Importing from Firecrawl...' : 'Searching Firecrawl...';
+      const response = await fetch('/api/firecrawl-search', {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify(getFirecrawlPayload(importResults)),
+      });
+      const body = await response.json();
+      status.className = response.ok ? 'ok' : 'error';
+      status.textContent = response.ok
+        ? (importResults ? `Imported ${body.count} company record(s).` : `Previewed ${body.records.length} result(s).`)
+        : body.error;
+      if (response.ok) {
+        renderFirecrawlResults(body.records || []);
+        if (importResults) loadRecords();
+      }
+    }
+
     document.getElementById('add-form').addEventListener('submit', async event => {
       event.preventDefault();
       const formData = new FormData(event.target);
@@ -150,6 +230,19 @@ INDEX_HTML = """
       status.textContent = response.ok ? `Imported ${body.count} record(s)` : body.error;
       if (response.ok) loadRecords();
     });
+
+    document.getElementById('firecrawl-api-key').value = localStorage.getItem(firecrawlKeyStorageName) || '';
+    document.getElementById('save-firecrawl-key').addEventListener('click', () => {
+      localStorage.setItem(firecrawlKeyStorageName, document.getElementById('firecrawl-api-key').value.trim());
+      document.getElementById('firecrawl-key-status').textContent = 'Saved locally in this browser.';
+    });
+    document.getElementById('clear-firecrawl-key').addEventListener('click', () => {
+      localStorage.removeItem(firecrawlKeyStorageName);
+      document.getElementById('firecrawl-api-key').value = '';
+      document.getElementById('firecrawl-key-status').textContent = 'Cleared from this browser.';
+    });
+    document.getElementById('firecrawl-preview').addEventListener('click', () => runFirecrawl(false));
+    document.getElementById('firecrawl-import').addEventListener('click', () => runFirecrawl(true));
 
     document.getElementById('search-button').addEventListener('click', loadRecords);
     document.getElementById('query').addEventListener('keydown', event => {
@@ -212,6 +305,24 @@ class PeopleFinderHandler(BaseHTTPRequestHandler):
                 records = records_from_csv_text(csv_text)
                 count = self.store.add_many(records)
                 self._send_json({"count": count}, status=HTTPStatus.CREATED)
+                return
+
+            if self.path == "/api/firecrawl-search":
+                payload = json.loads(self._read_body().decode("utf-8"))
+                include_domains = payload.get("include_domains") or []
+                validate_firecrawl_import("company", include_domains)
+                results = search_firecrawl(
+                    str(payload.get("query") or ""),
+                    limit=int(payload.get("limit") or 10),
+                    include_domains=include_domains,
+                    api_key=str(payload.get("api_key") or "") or None,
+                )
+                records = [result.to_company_record().as_dict() for result in results]
+                if payload.get("import_results"):
+                    count = self.store.add_many([PersonRecord.from_mapping(record) for record in records])
+                    self._send_json({"count": count, "records": records}, status=HTTPStatus.CREATED)
+                else:
+                    self._send_json({"records": records})
                 return
 
             self.send_error(HTTPStatus.NOT_FOUND)
