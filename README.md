@@ -59,7 +59,7 @@ python -m people_finder export --format pdf --output .\people.pdf
 The importer accepts these columns:
 
 ```text
-name, role, organization, city, country, email, phone, profile_url, source, notes, tags, consent_basis
+name, role, organization, city, ZIP ocde, country, email, phone, profile_url, source, notes, tags, consent_basis
 ```
 
 Extra columns are ignored. Missing columns are treated as blank.
@@ -72,8 +72,12 @@ Use this for:
 - Your own manually collected notes
 - Public professional or organizational pages where collection is allowed
 - Small, respectful research tasks with clear purpose
+- Bulk scraping private individuals
+- Collecting personal addresses
 
-The app keeps source and consent/lawful-basis fields visible so exported CSV/PDF files remain easy to review later.
+
+
+
 
 ## GitHub / Codex connection notes
 
