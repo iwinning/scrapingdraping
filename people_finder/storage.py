@@ -16,11 +16,13 @@ CREATE TABLE IF NOT EXISTS people (
     name TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT '',
     organization TEXT NOT NULL DEFAULT '',
+    address TEXT NOT NULL DEFAULT '',
     zip_code TEXT NOT NULL DEFAULT '',
     city TEXT NOT NULL DEFAULT '',
     country TEXT NOT NULL DEFAULT '',
     email TEXT NOT NULL DEFAULT '',
     phone TEXT NOT NULL DEFAULT '',
+    website TEXT NOT NULL DEFAULT '',
     profile_url TEXT NOT NULL DEFAULT '',
     source TEXT NOT NULL DEFAULT 'manual',
     notes TEXT NOT NULL DEFAULT '',
@@ -62,6 +64,10 @@ class PeopleStore:
                 connection.execute("ALTER TABLE people ADD COLUMN entity_type TEXT NOT NULL DEFAULT 'person'")
             if "zip_code" not in columns:
                 connection.execute("ALTER TABLE people ADD COLUMN zip_code TEXT NOT NULL DEFAULT ''")
+            if "address" not in columns:
+                connection.execute("ALTER TABLE people ADD COLUMN address TEXT NOT NULL DEFAULT ''")
+            if "website" not in columns:
+                connection.execute("ALTER TABLE people ADD COLUMN website TEXT NOT NULL DEFAULT ''")
 
     def add(self, record: PersonRecord) -> int:
         policy = validate_source_url(record.profile_url, record.entity_type)
@@ -118,18 +124,20 @@ class PeopleStore:
                OR entity_type LIKE ?
                OR role LIKE ?
                OR organization LIKE ?
+               OR address LIKE ?
                OR zip_code LIKE ?
                OR city LIKE ?
                OR country LIKE ?
                OR email LIKE ?
                OR phone LIKE ?
+               OR website LIKE ?
                OR profile_url LIKE ?
                OR source LIKE ?
                OR notes LIKE ?
                OR tags LIKE ?
                OR consent_basis LIKE ?
             """
-            params = [needle] * 14 + [limit]
+            params = [needle] * 16 + [limit]
         else:
             where = ""
             params = [limit]

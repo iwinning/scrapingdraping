@@ -79,14 +79,17 @@ In the web UI, the Firecrawl company search panel supports:
 - comma-separated domain filters such as `eniro.se, hitta.se`
 - result preview before import
 - checkbox selection for exactly which companies to import
+- detail extraction for selected company pages
 - duplicate skipping during imports
+
+For deployment instructions, see `DEPLOYMENT.md`.
 
 ## CSV columns
 
 The importer accepts these columns:
 
 ```text
-entity_type, name, role, organization, zip_code, city, country, email, phone, profile_url, source, notes, tags, consent_basis
+entity_type, name, role, organization, address, zip_code, city, country, email, phone, website, profile_url, source, notes, tags, consent_basis
 ```
 
 Extra columns are ignored. Missing columns are treated as blank.

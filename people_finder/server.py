@@ -7,9 +7,10 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .exporters import export_csv_text, export_pdf_bytes
-from .firecrawl_client import search_firecrawl, validate_firecrawl_import
+from .firecrawl_client import MAX_DETAIL_EXTRACTION_RECORDS, scrape_company_details, search_firecrawl, validate_firecrawl_import
 from .importers import records_from_csv_text
 from .models import PERSON_FIELDS, PersonRecord
+from .storage_factory import make_store
 from .storage import PeopleStore
 
 
@@ -60,11 +61,13 @@ INDEX_HTML = """
           </select>
           <label>Role</label><input name="role" />
           <label>Organization</label><input name="organization" />
+          <label>Address</label><input name="address" />
           <label>Postnummer / ZIP</label><input name="zip_code" />
           <label>Ort / city</label><input name="city" />
           <label>Country</label><input name="country" />
           <label>Email</label><input name="email" />
           <label>Phone</label><input name="phone" />
+          <label>Website</label><input name="website" placeholder="https://company.example" />
           <label>Profile URL</label><input name="profile_url" placeholder="https://example.com/profile" />
           <label>Source</label><input name="source" value="manual" />
           <label>Tags</label><input name="tags" placeholder="speaker, alumni, customer" />
@@ -77,7 +80,7 @@ INDEX_HTML = """
 
       <section class="card">
         <h2>Import CSV</h2>
-        <p class="subtle">Paste CSV with columns like: entity_type, name, role, organization, zip_code, city, country, email, phone, profile_url, source, notes, tags, consent_basis.</p>
+        <p class="subtle">Paste CSV with columns like: entity_type, name, role, organization, address, zip_code, city, country, email, phone, website, profile_url, source, notes, tags, consent_basis.</p>
         <textarea id="csv-text" placeholder="name,role,organization,city&#10;Ada Lovelace,Researcher,Example Lab,Stockholm"></textarea>
         <button id="import-button">Import</button>
         <p id="import-status"></p>
@@ -112,6 +115,7 @@ INDEX_HTML = """
           <input id="firecrawl-limit" type="number" min="1" max="25" value="10" />
           <div class="row">
             <button id="firecrawl-preview" class="secondary">Preview</button>
+            <button id="firecrawl-extract" class="secondary">Extract details for selected</button>
             <button id="select-all-firecrawl" class="secondary">Select all</button>
             <button id="clear-firecrawl-selection" class="secondary">Clear selection</button>
             <button id="firecrawl-import">Import selected</button>
@@ -153,9 +157,9 @@ INDEX_HTML = """
         <tr>
           <td>${escapeHtml(record.name)}<br><span class="subtle">${escapeHtml(record.entity_type)} · ${escapeHtml(record.tags)}</span></td>
           <td>${escapeHtml(record.role)}<br><span class="subtle">${escapeHtml(record.organization)}</span></td>
-          <td>${escapeHtml([record.zip_code, record.city, record.country].filter(Boolean).join(', '))}</td>
+          <td>${escapeHtml(record.address)}<br><span class="subtle">${escapeHtml([record.zip_code, record.city, record.country].filter(Boolean).join(', '))}</span></td>
           <td>${escapeHtml(record.email)}<br>${escapeHtml(record.phone)}</td>
-          <td>${record.profile_url ? `<a href="${escapeHtml(record.profile_url)}" target="_blank">profile</a>` : ''}<br><span class="subtle">${escapeHtml(record.source)}</span></td>
+          <td>${record.website ? `<a href="${escapeHtml(record.website)}" target="_blank">website</a>` : ''}${record.website && record.profile_url ? '<br>' : ''}${record.profile_url ? `<a href="${escapeHtml(record.profile_url)}" target="_blank">profile</a>` : ''}<br><span class="subtle">${escapeHtml(record.source)}</span></td>
         </tr>
       `).join('');
       document.getElementById('results').innerHTML = `
@@ -201,15 +205,15 @@ INDEX_HTML = """
         <tr>
           <td><input type="checkbox" class="firecrawl-select" data-index="${index}" checked /></td>
           <td>${escapeHtml(record.name)}</td>
-          <td>${escapeHtml([record.zip_code, record.city].filter(Boolean).join(' '))}</td>
+          <td>${escapeHtml(record.address)}<br><span class="subtle">${escapeHtml([record.zip_code, record.city].filter(Boolean).join(' '))}</span></td>
           <td>${record.profile_url ? `<a href="${escapeHtml(record.profile_url)}" target="_blank">${escapeHtml(record.profile_url)}</a>` : ''}</td>
-          <td>${escapeHtml(record.notes || '')}</td>
+          <td>${escapeHtml([record.phone, record.email, record.website].filter(Boolean).join(' · '))}<br><span class="subtle">${escapeHtml(record.notes || '')}</span></td>
         </tr>
       `).join('');
       document.getElementById('firecrawl-results').innerHTML = `
         <p class="subtle">${records.length} Firecrawl result(s)</p>
         <table>
-          <thead><tr><th>Import</th><th>Name</th><th>Location</th><th>URL</th><th>Description</th></tr></thead>
+          <thead><tr><th>Import</th><th>Name</th><th>Location</th><th>URL</th><th>Details</th></tr></thead>
           <tbody>${rows || '<tr><td colspan="5">No Firecrawl results yet.</td></tr>'}</tbody>
         </table>
       `;
@@ -261,6 +265,32 @@ INDEX_HTML = """
       if (response.ok) loadRecords();
     }
 
+    async function extractSelectedFirecrawlDetails() {
+      const selected = selectedFirecrawlRecords();
+      const status = document.getElementById('firecrawl-status');
+      if (!selected.length) {
+        status.className = 'error';
+        status.textContent = 'Select at least one result to extract details.';
+        return;
+      }
+      status.className = 'subtle';
+      status.textContent = `Extracting details from ${selected.length} selected page(s)...`;
+      const response = await fetch('/api/firecrawl-extract', {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify({
+          api_key: document.getElementById('firecrawl-api-key').value.trim(),
+          records: selected,
+        }),
+      });
+      const body = await response.json();
+      status.className = response.ok ? 'ok' : 'error';
+      status.textContent = response.ok
+        ? `Extracted details for ${body.records.length} record(s). Review, then import selected.`
+        : body.error;
+      if (response.ok) renderFirecrawlResults(body.records || []);
+    }
+
     document.getElementById('add-form').addEventListener('submit', async event => {
       event.preventDefault();
       const formData = new FormData(event.target);
@@ -299,6 +329,7 @@ INDEX_HTML = """
       document.getElementById('firecrawl-key-status').textContent = 'Cleared from this browser.';
     });
     document.getElementById('firecrawl-preview').addEventListener('click', previewFirecrawl);
+    document.getElementById('firecrawl-extract').addEventListener('click', extractSelectedFirecrawlDetails);
     document.getElementById('firecrawl-import').addEventListener('click', importSelectedFirecrawl);
     document.getElementById('select-all-firecrawl').addEventListener('click', () => {
       document.querySelectorAll('.firecrawl-select').forEach(input => input.checked = true);
@@ -392,6 +423,20 @@ class PeopleFinderHandler(BaseHTTPRequestHandler):
                 )
                 return
 
+            if self.path == "/api/firecrawl-extract":
+                payload = json.loads(self._read_body().decode("utf-8"))
+                api_key = str(payload.get("api_key") or "") or None
+                raw_records = payload.get("records", [])
+                if len(raw_records) > MAX_DETAIL_EXTRACTION_RECORDS:
+                    raise ValueError(f"Select at most {MAX_DETAIL_EXTRACTION_RECORDS} records for detail extraction at once.")
+                records = [PersonRecord.from_mapping(record) for record in raw_records]
+                enriched = [
+                    scrape_company_details(record, api_key=api_key).as_dict()
+                    for record in records
+                ]
+                self._send_json({"records": enriched})
+                return
+
             if self.path == "/api/firecrawl-search":
                 payload = json.loads(self._read_body().decode("utf-8"))
                 include_domains = payload.get("include_domains") or []
@@ -453,7 +498,7 @@ class PeopleFinderHandler(BaseHTTPRequestHandler):
 
 
 def run_server(db_path: str | Path = "data/people.db", host: str = "127.0.0.1", port: int = 8765) -> None:
-    PeopleFinderHandler.store = PeopleStore(db_path)
+    PeopleFinderHandler.store = make_store(str(db_path))
     server = ThreadingHTTPServer((host, port), PeopleFinderHandler)
     print(f"People Finder running at http://{host}:{port}")
     server.serve_forever()

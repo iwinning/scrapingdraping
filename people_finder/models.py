@@ -10,11 +10,13 @@ PERSON_FIELDS = [
     "name",
     "role",
     "organization",
+    "address",
     "zip_code",
     "city",
     "country",
     "email",
     "phone",
+    "website",
     "profile_url",
     "source",
     "notes",
@@ -29,23 +31,28 @@ class PersonRecord:
     entity_type: str = "person"
     role: str = ""
     organization: str = ""
+    address: str = ""
     zip_code: str = ""
     city: str = ""
     country: str = ""
     email: str = ""
     phone: str = ""
+    website: str = ""
     profile_url: str = ""
     source: str = "manual"
     notes: str = ""
     tags: str = ""
     consent_basis: str = ""
     collected_at: str = ""
-    id: int | None = None
+    id: int | str | None = None
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> "PersonRecord":
         clean = {field.name: str(data.get(field.name, "") or "").strip() for field in fields(cls)}
-        clean["id"] = int(clean["id"]) if clean.get("id") else None
+        if clean.get("id"):
+            clean["id"] = int(clean["id"]) if clean["id"].isdigit() else clean["id"]
+        else:
+            clean["id"] = None
         clean["entity_type"] = normalize_entity_type(clean.get("entity_type", "person"))
         if not clean["collected_at"]:
             clean["collected_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
