@@ -10,6 +10,7 @@ PERSON_FIELDS = [
     "name",
     "role",
     "organization",
+    "zip_code",
     "city",
     "country",
     "email",
@@ -28,6 +29,7 @@ class PersonRecord:
     entity_type: str = "person"
     role: str = ""
     organization: str = ""
+    zip_code: str = ""
     city: str = ""
     country: str = ""
     email: str = ""

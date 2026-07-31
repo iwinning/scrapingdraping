@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS people (
     name TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT '',
     organization TEXT NOT NULL DEFAULT '',
+    zip_code TEXT NOT NULL DEFAULT '',
     city TEXT NOT NULL DEFAULT '',
     country TEXT NOT NULL DEFAULT '',
     email TEXT NOT NULL DEFAULT '',
@@ -50,6 +51,8 @@ class PeopleStore:
             columns = {row["name"] for row in connection.execute("PRAGMA table_info(people)").fetchall()}
             if "entity_type" not in columns:
                 connection.execute("ALTER TABLE people ADD COLUMN entity_type TEXT NOT NULL DEFAULT 'person'")
+            if "zip_code" not in columns:
+                connection.execute("ALTER TABLE people ADD COLUMN zip_code TEXT NOT NULL DEFAULT ''")
 
     def add(self, record: PersonRecord) -> int:
         policy = validate_source_url(record.profile_url, record.entity_type)
@@ -93,6 +96,7 @@ class PeopleStore:
                OR entity_type LIKE ?
                OR role LIKE ?
                OR organization LIKE ?
+               OR zip_code LIKE ?
                OR city LIKE ?
                OR country LIKE ?
                OR email LIKE ?
@@ -103,7 +107,7 @@ class PeopleStore:
                OR tags LIKE ?
                OR consent_basis LIKE ?
             """
-            params = [needle] * 13 + [limit]
+            params = [needle] * 14 + [limit]
         else:
             where = ""
             params = [limit]

@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .exporters import export_csv_file, export_pdf_file
+from .firecrawl_client import search_firecrawl, validate_firecrawl_import
 from .importers import records_from_csv_file
 from .models import PERSON_FIELDS, PersonRecord
 from .server import run_server
@@ -38,6 +39,13 @@ def build_parser() -> argparse.ArgumentParser:
     export.add_argument("--format", choices=["csv", "pdf"], required=True)
     export.add_argument("--output", required=True)
 
+    firecrawl = subparsers.add_parser("firecrawl-search", help="Search web results through Firecrawl and optionally import company records.")
+    firecrawl.add_argument("--query", required=True)
+    firecrawl.add_argument("--limit", default=10, type=int)
+    firecrawl.add_argument("--include-domain", action="append", default=[], help="Restrict results to a domain. Can be repeated.")
+    firecrawl.add_argument("--entity-type", choices=["company"], default="company", help="Firecrawl imports are currently company-only.")
+    firecrawl.add_argument("--import-results", action="store_true", help="Save results as company records instead of only previewing.")
+
     return parser
 
 
@@ -52,13 +60,19 @@ def main() -> None:
 
     if args.command == "add":
         payload = {field: getattr(args, field) for field in PERSON_FIELDS}
-        record_id = store.add(PersonRecord.from_mapping(payload))
+        try:
+            record_id = store.add(PersonRecord.from_mapping(payload))
+        except ValueError as exc:
+            parser.exit(2, f"Error: {exc}\n")
         print(f"Added record #{record_id}")
         return
 
     if args.command == "import-csv":
-        records = records_from_csv_file(args.path)
-        count = store.add_many(records)
+        try:
+            records = records_from_csv_file(args.path)
+            count = store.add_many(records)
+        except ValueError as exc:
+            parser.exit(2, f"Error: {exc}\n")
         print(f"Imported {count} record(s)")
         return
 
@@ -84,6 +98,22 @@ def main() -> None:
         else:
             export_pdf_file(records, output)
         print(f"Exported {len(records)} record(s) to {output}")
+        return
+
+    if args.command == "firecrawl-search":
+        try:
+            validate_firecrawl_import(args.entity_type, args.include_domain)
+            results = search_firecrawl(args.query, limit=args.limit, include_domains=args.include_domain)
+        except (RuntimeError, ValueError) as exc:
+            parser.exit(2, f"Error: {exc}\n")
+        records = [result.to_company_record() for result in results]
+        if args.import_results:
+            count = store.add_many(records)
+            print(f"Imported {count} Firecrawl result(s).")
+        else:
+            for record in records:
+                print(f"{record.name} | {record.profile_url}")
+            print(f"Previewed {len(records)} result(s). Add --import-results to save them.")
         return
 
     parser.error("Unknown command.")

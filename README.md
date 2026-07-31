@@ -32,13 +32,13 @@ http://127.0.0.1:8765
 Add a record:
 
 ```powershell
-python -m people_finder add --entity-type person --name "Ada Lovelace" --role "Researcher" --organization "Example Lab" --city "Stockholm" --source "manual" --notes "Met at event; consented to follow-up."
+python -m people_finder add --entity-type person --name "Ada Lovelace" --role "Researcher" --organization "Example Lab" --zip-code "111 22" --city "Stockholm" --source "manual" --notes "Met at event; consented to follow-up."
 ```
 
-Add a company record from a directory URL:
+Add a company record from a directory URL, including postnummer/ort:
 
 ```powershell
-python -m people_finder add --entity-type company --name "Example AB" --city "Stockholm" --profile-url "https://www.eniro.se/example/f%C3%B6retag" --source "Eniro"
+python -m people_finder add --entity-type company --name "Example AB" --zip-code "111 22" --city "Stockholm" --profile-url "https://www.eniro.se/example/f%C3%B6retag" --source "Eniro"
 ```
 
 Search:
@@ -60,12 +60,22 @@ python -m people_finder export --format csv --output .\people.csv
 python -m people_finder export --format pdf --output .\people.pdf
 ```
 
+Search with Firecrawl:
+
+```powershell
+$env:FIRECRAWL_API_KEY = "fc-YOUR-API-KEY"
+python -m people_finder firecrawl-search --query "redovisningsbyrå Stockholm företag" --include-domain eniro.se --limit 10
+python -m people_finder firecrawl-search --query "redovisningsbyrå Stockholm företag" --include-domain eniro.se --limit 10 --import-results
+```
+
+The Firecrawl connector is company-only in this starter. Use it for sources and domains where you have permission to search/import data.
+
 ## CSV columns
 
 The importer accepts these columns:
 
 ```text
-entity_type, name, role, organization, city, country, email, phone, profile_url, source, notes, tags, consent_basis
+entity_type, name, role, organization, zip_code, city, country, email, phone, profile_url, source, notes, tags, consent_basis
 ```
 
 Extra columns are ignored. Missing columns are treated as blank.

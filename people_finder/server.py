@@ -59,7 +59,8 @@ INDEX_HTML = """
           </select>
           <label>Role</label><input name="role" />
           <label>Organization</label><input name="organization" />
-          <label>City</label><input name="city" />
+          <label>Postnummer / ZIP</label><input name="zip_code" />
+          <label>Ort / city</label><input name="city" />
           <label>Country</label><input name="country" />
           <label>Email</label><input name="email" />
           <label>Phone</label><input name="phone" />
@@ -75,7 +76,7 @@ INDEX_HTML = """
 
       <section class="card">
         <h2>Import CSV</h2>
-        <p class="subtle">Paste CSV with columns like: entity_type, name, role, organization, city, country, email, phone, profile_url, source, notes, tags, consent_basis.</p>
+        <p class="subtle">Paste CSV with columns like: entity_type, name, role, organization, zip_code, city, country, email, phone, profile_url, source, notes, tags, consent_basis.</p>
         <textarea id="csv-text" placeholder="name,role,organization,city&#10;Ada Lovelace,Researcher,Example Lab,Stockholm"></textarea>
         <button id="import-button">Import</button>
         <p id="import-status"></p>
@@ -111,7 +112,7 @@ INDEX_HTML = """
         <tr>
           <td>${escapeHtml(record.name)}<br><span class="subtle">${escapeHtml(record.entity_type)} · ${escapeHtml(record.tags)}</span></td>
           <td>${escapeHtml(record.role)}<br><span class="subtle">${escapeHtml(record.organization)}</span></td>
-          <td>${escapeHtml([record.city, record.country].filter(Boolean).join(', '))}</td>
+          <td>${escapeHtml([record.zip_code, record.city, record.country].filter(Boolean).join(', '))}</td>
           <td>${escapeHtml(record.email)}<br>${escapeHtml(record.phone)}</td>
           <td>${record.profile_url ? `<a href="${escapeHtml(record.profile_url)}" target="_blank">profile</a>` : ''}<br><span class="subtle">${escapeHtml(record.source)}</span></td>
         </tr>
