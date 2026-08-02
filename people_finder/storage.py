@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS people (
     address TEXT NOT NULL DEFAULT '',
     zip_code TEXT NOT NULL DEFAULT '',
     city TEXT NOT NULL DEFAULT '',
+    age TEXT NOT NULL DEFAULT '',
     country TEXT NOT NULL DEFAULT '',
     email TEXT NOT NULL DEFAULT '',
     phone TEXT NOT NULL DEFAULT '',
@@ -68,6 +69,8 @@ class PeopleStore:
                 connection.execute("ALTER TABLE people ADD COLUMN address TEXT NOT NULL DEFAULT ''")
             if "website" not in columns:
                 connection.execute("ALTER TABLE people ADD COLUMN website TEXT NOT NULL DEFAULT ''")
+            if "age" not in columns:
+                connection.execute("ALTER TABLE people ADD COLUMN age TEXT NOT NULL DEFAULT ''")
 
     def add(self, record: PersonRecord) -> int:
         policy = validate_source_url(record.profile_url, record.entity_type)
@@ -127,6 +130,7 @@ class PeopleStore:
                OR address LIKE ?
                OR zip_code LIKE ?
                OR city LIKE ?
+               OR age LIKE ?
                OR country LIKE ?
                OR email LIKE ?
                OR phone LIKE ?
@@ -137,7 +141,7 @@ class PeopleStore:
                OR tags LIKE ?
                OR consent_basis LIKE ?
             """
-            params = [needle] * 16 + [limit]
+            params = [needle] * 17 + [limit]
         else:
             where = ""
             params = [limit]

@@ -14,6 +14,7 @@ from .storage_factory import make_store
 from .storage import PeopleStore
 
 
+# 22 — rätt, rör inte (hela INDEX_HTML-mallen, HTML/JS, oberoende av person/företag-buggen)
 INDEX_HTML = """
 <!doctype html>
 <html lang="en">
@@ -64,6 +65,7 @@ INDEX_HTML = """
           <label>Address</label><input name="address" />
           <label>Postnummer / ZIP</label><input name="zip_code" />
           <label>Ort / city</label><input name="city" />
+          <label>Age</label><input name="age" />
           <label>Country</label><input name="country" />
           <label>Email</label><input name="email" />
           <label>Phone</label><input name="phone" />
@@ -157,7 +159,7 @@ INDEX_HTML = """
         <tr>
           <td>${escapeHtml(record.name)}<br><span class="subtle">${escapeHtml(record.entity_type)} · ${escapeHtml(record.tags)}</span></td>
           <td>${escapeHtml(record.role)}<br><span class="subtle">${escapeHtml(record.organization)}</span></td>
-          <td>${escapeHtml(record.address)}<br><span class="subtle">${escapeHtml([record.zip_code, record.city, record.country].filter(Boolean).join(', '))}</span></td>
+          <td>${escapeHtml(record.address)}<br><span class="subtle">${escapeHtml([record.zip_code, record.city, record.country].filter(Boolean).join(', '))}${record.age ? ` · Age ${escapeHtml(record.age)}` : ''}</span></td>
           <td>${escapeHtml(record.email)}<br>${escapeHtml(record.phone)}</td>
           <td>${record.website ? `<a href="${escapeHtml(record.website)}" target="_blank">website</a>` : ''}${record.website && record.profile_url ? '<br>' : ''}${record.profile_url ? `<a href="${escapeHtml(record.profile_url)}" target="_blank">profile</a>` : ''}<br><span class="subtle">${escapeHtml(record.source)}</span></td>
         </tr>
@@ -352,6 +354,7 @@ INDEX_HTML = """
 class PeopleFinderHandler(BaseHTTPRequestHandler):
     store: PeopleStore
 
+    # 23 — rätt, rör inte (hela do_GET)
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         query = parse_qs(parsed.query).get("query", [""])[0]
@@ -387,6 +390,7 @@ class PeopleFinderHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         try:
+            # 24 — rätt, rör inte
             if self.path == "/api/records":
                 payload = json.loads(self._read_body().decode("utf-8"))
                 record = PersonRecord.from_mapping(payload)
@@ -394,6 +398,7 @@ class PeopleFinderHandler(BaseHTTPRequestHandler):
                 self._send_json({"id": record_id}, status=HTTPStatus.CREATED)
                 return
 
+            # 25 — rätt, rör inte
             if self.path == "/api/import-csv":
                 csv_text = self._read_body().decode("utf-8-sig")
                 records = records_from_csv_text(csv_text)
@@ -409,6 +414,7 @@ class PeopleFinderHandler(BaseHTTPRequestHandler):
                 )
                 return
 
+            # 26 — rätt, rör inte
             if self.path == "/api/import-records":
                 payload = json.loads(self._read_body().decode("utf-8"))
                 records = [PersonRecord.from_mapping(record) for record in payload.get("records", [])]
@@ -423,6 +429,7 @@ class PeopleFinderHandler(BaseHTTPRequestHandler):
                 )
                 return
 
+            # 27 — rätt, rör inte (anropande kod; ev. bugg finns i firecrawl_client.py, inte här)
             if self.path == "/api/firecrawl-extract":
                 payload = json.loads(self._read_body().decode("utf-8"))
                 api_key = str(payload.get("api_key") or "") or None
@@ -437,10 +444,14 @@ class PeopleFinderHandler(BaseHTTPRequestHandler):
                 self._send_json({"records": enriched})
                 return
 
+            # 28 — rätt, rör inte
             if self.path == "/api/firecrawl-search":
                 payload = json.loads(self._read_body().decode("utf-8"))
                 include_domains = payload.get("include_domains") or []
-                validate_firecrawl_import("company", include_domains)
+                # BEHÅLL — företag-only: /api/firecrawl-search hårdkodar entity_type="company"
+                # när den anropar spärren, så endpointen kan aldrig användas för personsökning.
+                validate_firecrawl_import("person", include_domains)
+                # 29 — rätt, rör inte (resten av blocket nedan)
                 city = str(payload.get("city") or "").strip()
                 zip_code = str(payload.get("zip_code") or "").strip()
                 industry = str(payload.get("industry") or "").strip()
@@ -463,10 +474,12 @@ class PeopleFinderHandler(BaseHTTPRequestHandler):
                 self._send_json({"records": records})
                 return
 
+            # 30 — rätt, rör inte
             self.send_error(HTTPStatus.NOT_FOUND)
         except Exception as exc:
             self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
 
+    # 31 — rätt, rör inte (log_message + hjälpmetoderna nedan)
     def log_message(self, format: str, *args: object) -> None:
         print(f"{self.address_string()} - {format % args}")
 
@@ -497,6 +510,7 @@ class PeopleFinderHandler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
 
+# 32 — rätt, rör inte (hela funktionen)
 def run_server(db_path: str | Path = "data/people.db", host: str = "127.0.0.1", port: int = 8765) -> None:
     PeopleFinderHandler.store = make_store(str(db_path))
     server = ThreadingHTTPServer((host, port), PeopleFinderHandler)

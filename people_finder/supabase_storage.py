@@ -79,6 +79,7 @@ class SupabasePeopleStore:
                     "address",
                     "zip_code",
                     "city",
+                    "age",
                     "country",
                     "email",
                     "phone",

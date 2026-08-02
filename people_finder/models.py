@@ -13,6 +13,7 @@ PERSON_FIELDS = [
     "address",
     "zip_code",
     "city",
+    "age",
     "country",
     "email",
     "phone",
@@ -34,6 +35,7 @@ class PersonRecord:
     address: str = ""
     zip_code: str = ""
     city: str = ""
+    age: str = ""
     country: str = ""
     email: str = ""
     phone: str = ""

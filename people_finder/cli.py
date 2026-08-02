@@ -17,6 +17,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--db", default="data/people.db", help="SQLite database path.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    # 18 — rätt, rör inte (serve/add/import-csv/search/export-subparsers nedan)
     serve = subparsers.add_parser("serve", help="Run the local web UI.")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", default=8765, type=int)
@@ -40,15 +41,20 @@ def build_parser() -> argparse.ArgumentParser:
     export.add_argument("--output", required=True)
 
     firecrawl = subparsers.add_parser("firecrawl-search", help="Search web results through Firecrawl and optionally import company records.")
+    # 19 — rätt, rör inte
     firecrawl.add_argument("--query", required=True)
     firecrawl.add_argument("--limit", default=10, type=int)
     firecrawl.add_argument("--include-domain", action="append", default=[], help="Restrict results to a domain. Can be repeated.")
-    firecrawl.add_argument("--entity-type", choices=["company"], default="company", help="Firecrawl imports are currently company-only.")
+    # BEHÅLL — företag-only: choices=["company"] gör det omöjligt att köra firecrawl-search
+    # med entity_type="person" via CLI:t.
+    firecrawl.add_argument("--entity-type", choices=["person"], default="person", help="Firecrawl imports are currently person-only.")
+    # 20 — rätt, rör inte
     firecrawl.add_argument("--import-results", action="store_true", help="Save results as company records instead of only previewing.")
 
     return parser
 
 
+# 21 — rätt, rör inte (hela main()-funktionen är oberoende av person/företag-buggen)
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()

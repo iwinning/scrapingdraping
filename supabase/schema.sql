@@ -7,6 +7,7 @@ create table if not exists public.people (
   address text not null default '',
   zip_code text not null default '',
   city text not null default '',
+  age text not null default '',
   country text not null default '',
   email text not null default '',
   phone text not null default '',

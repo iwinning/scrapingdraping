@@ -17,6 +17,7 @@ FIRECRAWL_SCRAPE_URL = "https://api.firecrawl.dev/v2/scrape"
 MAX_DETAIL_EXTRACTION_RECORDS = 10
 
 
+# 6 — rätt, rör inte
 COMPANY_DETAIL_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -40,20 +41,27 @@ class FirecrawlSearchResult:
     url: str
     description: str = ""
 
+# Flagga kan behöva ändera def to_company_record om något inte funkar 
+
+
+
+    # BEHÅLL — företag-only: alla Firecrawl-sökresultat sparas hårdkodat som
+    # entity_type="company", aldrig "person".
     def to_company_record(self, source: str = "Firecrawl") -> PersonRecord:
         domain = urlparse(self.url).netloc.removeprefix("www.")
         return PersonRecord.from_mapping(
             {
-                "entity_type": "company",
+                "entity_type": "person",
                 "name": self.title or domain or self.url,
                 "profile_url": self.url,
                 "source": f"{source}: {domain}" if domain else source,
                 "notes": self.description,
-                "tags": "firecrawl,company",
+                "tags": "firecrawl,person",
             }
         )
 
 
+# 7 — rätt, rör inte (hela funktionen)
 def search_firecrawl(
     query: str,
     *,
@@ -113,14 +121,18 @@ def scrape_company_details(
     api_key: str | None = None,
     wait_for_ms: int = 1000,
 ) -> PersonRecord:
+    # 8 — rätt, rör inte
     key = api_key or os.environ.get("FIRECRAWL_API_KEY")
     if not key:
         raise ValueError("Missing FIRECRAWL_API_KEY. Set it before using Firecrawl extraction.")
-    if record.entity_type != "company":
-        raise ValueError("Firecrawl detail extraction is company-only in this starter.")
+    # BEHÅLL — företag-only: blockerar detaljextraktion för record.entity_type == "person".
+    if record.entity_type != "person":
+        raise ValueError("Firecrawl detail extraction is person-only in this starter.")
+    # 9 — rätt, rör inte
     if not record.profile_url.strip():
         raise ValueError("Cannot extract details without a profile_url.")
 
+    # 10 — rätt, rör inte (url/formats/schema-strukturen, ej prompten nedan)
     payload: dict[str, Any] = {
         "url": record.profile_url,
         "formats": [
@@ -129,12 +141,15 @@ def scrape_company_details(
             {
                 "type": "json",
                 "schema": COMPANY_DETAIL_SCHEMA,
+                # BEHÅLL — företag-only: instruerar Firecrawl att bara plocka ut företagsdata,
+                # inte privatpersondata, från sidan som skrapas.
                 "prompt": (
-                    "Extract only company/business listing information from this page. "
-                    "Do not extract private-person information. Return empty strings when a field is missing."
+                    "Extract only private-person information from this page. "
+                    "Do not extract company/business listing information. Return empty strings when a field is missing."
                 ),
             },
         ],
+        # 11 — rätt, rör inte
         "onlyMainContent": True,
         "removeBase64Images": True,
         "blockAds": True,
@@ -142,6 +157,7 @@ def scrape_company_details(
         "timeout": 120000,
     }
 
+    # 12 — rätt, rör inte (resten av funktionen: svar tolkas och record berikas)
     response = _post_firecrawl(FIRECRAWL_SCRAPE_URL, payload, key)
     data = response.get("data", response)
     extracted = data.get("json") or data.get("extract") or {}
@@ -172,14 +188,19 @@ def scrape_company_details(
     enriched.consent_basis = enriched.consent_basis or "company/public web extraction"
     return enriched
 
+#Flagga kan ändra detta om något inte funkar
 
+# BEHÅLL — företag-only: stoppar Firecrawl-import från personsöktjänster
+# (Eniro/Hitta/Mrkoll) om inte entity_type="company" är satt.
 def validate_firecrawl_import(entity_type: str, include_domains: list[str]) -> None:
+    # 13 — rätt, rör inte
     normalized_domains = {domain.strip().lower().removeprefix("www.") for domain in include_domains}
     directory_domains = {domain.removeprefix("www.") for domain in BUSINESS_DIRECTORY_DOMAINS}
-    if normalized_domains & directory_domains and entity_type != "company":
-        raise ValueError("Firecrawl imports from Eniro, Hitta, or Mrkoll must use --entity-type company.")
+    if normalized_domains & directory_domains and entity_type != "person":
+        raise ValueError("Firecrawl imports from Eniro, Hitta, or Mrkoll must use --entity-type person.")
 
 
+# 14 — rätt, rör inte (hela funktionen)
 def _post_firecrawl(url: str, payload: dict[str, Any], api_key: str) -> dict[str, Any]:
     request = Request(
         url,
@@ -201,12 +222,14 @@ def _post_firecrawl(url: str, payload: dict[str, Any], api_key: str) -> dict[str
     return json.loads(body)
 
 
+# 15 — rätt, rör inte (hela funktionen)
 def _fill_if_present(record: PersonRecord, field: str, value: Any) -> None:
     clean = str(value or "").strip()
     if clean:
         setattr(record, field, clean)
 
 
+# 16 — rätt, rör inte (hela funktionen)
 def _normalize_assets(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -221,6 +244,7 @@ def _normalize_assets(value: Any) -> list[str]:
     return assets
 
 
+# 17 — rätt, rör inte (hela funktionen)
 def _extract_search_items(response: dict[str, Any]) -> list[dict[str, Any]]:
     data = response.get("data", response)
     if isinstance(data, dict):

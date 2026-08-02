@@ -37,6 +37,7 @@ def export_pdf_bytes(records: list[PersonRecord], title: str = "People Finder Ex
                 f"   Organization: {record.organization or '-'}",
                 f"   Address: {record.address or '-'}",
                 f"   Location: {', '.join(part for part in [record.zip_code, record.city, record.country] if part) or '-'}",
+                f"   Age: {record.age or '-'}",
                 f"   Email: {record.email or '-'}",
                 f"   Phone: {record.phone or '-'}",
                 f"   Website: {record.website or '-'}",
