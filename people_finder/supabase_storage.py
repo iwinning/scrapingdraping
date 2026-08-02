@@ -21,6 +21,10 @@ class SupabasePeopleStore:
         if not self.url or not self.service_key:
             raise ValueError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for Supabase storage.")
 
+    # VIKTIGT – BEHÅLL DENNA KONTROLL: samma anropspunkt som storage.py PeopleStore.add() —
+    # kör person/företag-policyn på varje post som sparas i Supabase. Tas den bort sparas
+    # poster i molndatabasen utan någon kontroll alls. (Samma OBS som i storage.py gäller:
+    # policy.py:s regel är just nu omvänd/trasig, men själva anropet ska vara kvar.)
     def add(self, record: PersonRecord) -> int | str:
         policy = validate_source_url(record.profile_url, record.entity_type)
         if not policy.allowed:
@@ -42,6 +46,7 @@ class SupabasePeopleStore:
         summary = AddManySummary()
         seen_batch: set[tuple[str, ...]] = set()
         payloads: list[dict[str, str]] = []
+        # VIKTIGT – BEHÅLL DENNA KONTROLL: samma sak som add() ovan, fast för bulk-import.
         for record in records:
             policy = validate_source_url(record.profile_url, record.entity_type)
             if not policy.allowed:
@@ -95,6 +100,8 @@ class SupabasePeopleStore:
         response = self._request("GET", f"/rest/v1/{SUPABASE_TABLE}?{urlencode(params, safe='(),.*')}")
         return [PersonRecord.from_mapping(item) for item in response]
 
+    # osäker – bör granskas manuellt: entity_type används här som en del av
+    # dubblettnyckeln, inte som en person/företag-spärr (se _fingerprint nedan också).
     def _exists(self, record: PersonRecord) -> bool:
         if record.profile_url.strip():
             params = urlencode({"select": "id", "profile_url": f"eq.{record.profile_url.strip()}", "limit": 1})
@@ -129,6 +136,8 @@ class SupabasePeopleStore:
             text = response.read().decode("utf-8")
         return json.loads(text) if text else []
 
+    # Bra kod: bygger payloaden från PERSON_FIELDS istället för att hårdkoda fältnamn,
+    # så den hänger med automatiskt när fält (som "age") läggs till i models.py.
     def _record_payload(self, record: PersonRecord) -> dict[str, str]:
         return {field: str(getattr(record, field) or "") for field in [*PERSON_FIELDS, "collected_at"]}
 

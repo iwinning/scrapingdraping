@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from urllib.parse import urlparse
 
 
-# 1 — rätt, rör inte
+# 1 — klart
 # BEHÅLL — företag-only: domäner för svenska personsöktjänster, används för att
 # begränsa scraping från dem till entity_type="company" (se validate_source_url nedan).
 BUSINESS_DIRECTORY_DOMAINS = {
@@ -16,7 +16,7 @@ BUSINESS_DIRECTORY_DOMAINS = {
     "www.eniro.se",
 }
 
-# 2 — rätt, rör inte
+# 2 — klar 
 SENSITIVE_FIELD_HINTS = {
     "personnummer",
     "ssn",

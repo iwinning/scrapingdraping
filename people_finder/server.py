@@ -179,7 +179,7 @@ INDEX_HTML = """
         document.getElementById('firecrawl-industry').value.trim(),
         document.getElementById('firecrawl-zip-code').value.trim(),
         document.getElementById('firecrawl-city').value.trim(),
-        'foretag',
+        /* 'foretag', */ 
       ].filter(Boolean).join(' ');
     }
 
@@ -388,6 +388,10 @@ class PeopleFinderHandler(BaseHTTPRequestHandler):
 
         self.send_error(HTTPStatus.NOT_FOUND)
 
+    # Bra kod: hela do_POST är omsluten av en enda try/except längst ner, så varje endpoint
+    # ovan kan låta ValueError (t.ex. från policy-kontrollerna) och andra fel bubbla upp
+    # och alltid returneras som ett enhetligt JSON-felsvar istället för att varje endpoint
+    # behöver egen felhantering.
     def do_POST(self) -> None:
         try:
             # 24 — rätt, rör inte
@@ -450,6 +454,10 @@ class PeopleFinderHandler(BaseHTTPRequestHandler):
                 include_domains = payload.get("include_domains") or []
                 # BEHÅLL — företag-only: /api/firecrawl-search hårdkodar entity_type="company"
                 # när den anropar spärren, så endpointen kan aldrig användas för personsökning.
+                # OBS – DENNA KONTROLL GÖR MOTSATSEN JUST NU (kommentaren ovan stämmer inte
+                # längre): anropet skickar hårdkodat "person" istället för "company", så
+                # webb-UI:ts Firecrawl-sökning tillåts nu mot Eniro/Hitta/Mrkoll. Ska vara
+                # validate_firecrawl_import("company", include_domains).
                 validate_firecrawl_import("person", include_domains)
                 # 29 — rätt, rör inte (resten av blocket nedan)
                 city = str(payload.get("city") or "").strip()

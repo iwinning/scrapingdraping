@@ -71,7 +71,17 @@ class PeopleStore:
                 connection.execute("ALTER TABLE people ADD COLUMN website TEXT NOT NULL DEFAULT ''")
             if "age" not in columns:
                 connection.execute("ALTER TABLE people ADD COLUMN age TEXT NOT NULL DEFAULT ''")
+            # Bra kod: detta migrationsmönster (kolla PRAGMA table_info, lägg till kolumn om
+            # den saknas) gör att gamla, redan skapade databaser kan öppnas med en nyare
+            # schemaversion utan att befintlig data eller körande instanser går sönder.
 
+    # VIKTIGT – BEHÅLL DENNA KONTROLL: detta är anropspunkten som faktiskt kör
+    # person/företag-policyn (validate_source_url) på varje post som sparas manuellt eller
+    # via /api/records. Tas denna kontroll (raderna nedan) bort helt sparas poster utan
+    # NÅGON kontroll alls, oavsett vad policy.py säger. OBS – se separat flagga i
+    # policy.py: just nu returnerar validate_source_url fel resultat för Eniro/Hitta/Mrkoll
+    # (kräver entity_type="person" istället för "company"), så anropet här kör en trasig
+    # regel just nu — men själva anropet ska vara kvar när regeln är rättad.
     def add(self, record: PersonRecord) -> int:
         policy = validate_source_url(record.profile_url, record.entity_type)
         if not policy.allowed:
@@ -79,6 +89,9 @@ class PeopleStore:
         if not record.name.strip():
             raise ValueError("Name is required.")
 
+        # Bra kod: bygger INSERT-kolumnerna från PERSON_FIELDS istället för att hårdkoda
+        # dem igen — lägger man till ett nytt fält i models.py (som "age") behöver denna
+        # rad inte röras, den hänger med automatiskt.
         columns = PERSON_FIELDS + ["collected_at"]
         values = [getattr(record, column) for column in columns]
         placeholders = ", ".join("?" for _ in columns)
@@ -97,6 +110,9 @@ class PeopleStore:
         prepared_records = list(records)
         count = 0
         with self._connect() as connection:
+            # VIKTIGT – BEHÅLL DENNA KONTROLL: samma sak som i add() ovan, fast för
+            # bulk-import (CSV/Firecrawl-import). Tas denna bort importeras poster i bulk
+            # utan policykontroll alls.
             for record in prepared_records:
                 policy = validate_source_url(record.profile_url, record.entity_type)
                 if not policy.allowed:
@@ -151,6 +167,8 @@ class PeopleStore:
             rows = connection.execute(sql, params).fetchall()
         return [PersonRecord.from_mapping(dict(row)) for row in rows]
 
+    # osäker – bör granskas manuellt: entity_type används här som en del av
+    # dubblettnyckeln (tillsammans med namn/zip/city), inte som en person/företag-spärr.
     def _exists(self, connection: sqlite3.Connection, record: PersonRecord) -> bool:
         if record.profile_url.strip():
             row = connection.execute(

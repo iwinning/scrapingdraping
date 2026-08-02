@@ -47,6 +47,12 @@ class FirecrawlSearchResult:
 
     # BEHÅLL — företag-only: alla Firecrawl-sökresultat sparas hårdkodat som
     # entity_type="company", aldrig "person".
+    # OBS – DENNA KONTROLL GÖR MOTSATSEN JUST NU: raderna "entity_type": "person" och
+    # "tags": "firecrawl,person" nedan gör att VARJE Firecrawl-sökträff (oavsett vilken
+    # domän den kom från) sparas som en personpost. Kombinerat med att
+    # validate_firecrawl_import/--entity-type nu kräver "person" för Eniro/Hitta/Mrkoll
+    # (se längre ner i filen och i cli.py) gör detta att sökningar mot just de domänerna
+    # sparar resultat som privatpersoner. Ska ändras tillbaka till "company"/"firecrawl,company".
     def to_company_record(self, source: str = "Firecrawl") -> PersonRecord:
         domain = urlparse(self.url).netloc.removeprefix("www.")
         return PersonRecord.from_mapping(
@@ -126,6 +132,10 @@ def scrape_company_details(
     if not key:
         raise ValueError("Missing FIRECRAWL_API_KEY. Set it before using Firecrawl extraction.")
     # BEHÅLL — företag-only: blockerar detaljextraktion för record.entity_type == "person".
+    # OBS – DENNA KONTROLL GÖR MOTSATSEN JUST NU: villkoret kräver just nu
+    # entity_type == "person" (kastar fel annars), vilket betyder att detaljextraktion
+    # (adress, telefon, e-post m.m.) bara körs för personposter, inte företagsposter.
+    # Ska vara != "company" för att blockera person-extraktion istället.
     if record.entity_type != "person":
         raise ValueError("Firecrawl detail extraction is person-only in this starter.")
     # 9 — rätt, rör inte
@@ -143,6 +153,11 @@ def scrape_company_details(
                 "schema": COMPANY_DETAIL_SCHEMA,
                 # BEHÅLL — företag-only: instruerar Firecrawl att bara plocka ut företagsdata,
                 # inte privatpersondata, från sidan som skrapas.
+                # OBS – DENNA KONTROLL GÖR MOTSATSEN JUST NU: prompten instruerar AI-modellen
+                # att aktivt plocka ut privatpersoninformation (namn, adress, telefon, e-post
+                # för en enskild person) och uttryckligen INTE företagsinformation. Om denna
+                # rad tas bort eller ändras tillbaka minskar risken för att systemet extraherar
+                # personuppgifter från skrapade sidor.
                 "prompt": (
                     "Extract only private-person information from this page. "
                     "Do not extract company/business listing information. Return empty strings when a field is missing."
@@ -196,6 +211,10 @@ def validate_firecrawl_import(entity_type: str, include_domains: list[str]) -> N
     # 13 — rätt, rör inte
     normalized_domains = {domain.strip().lower().removeprefix("www.") for domain in include_domains}
     directory_domains = {domain.removeprefix("www.") for domain in BUSINESS_DIRECTORY_DOMAINS}
+    # OBS – DENNA KONTROLL GÖR MOTSATSEN JUST NU: kräver entity_type == "person" för att
+    # tillåta sökning/import mot Eniro/Hitta/Mrkoll (kastar annars fel). Det är alltså denna
+    # rad som just nu SLÄPPER IGENOM sökningar mot personsöktjänsterna istället för att
+    # blockera dem. Ska vara != "company" för att stoppa personsökning mot dessa domäner.
     if normalized_domains & directory_domains and entity_type != "person":
         raise ValueError("Firecrawl imports from Eniro, Hitta, or Mrkoll must use --entity-type person.")
 
@@ -223,6 +242,8 @@ def _post_firecrawl(url: str, payload: dict[str, Any], api_key: str) -> dict[str
 
 
 # 15 — rätt, rör inte (hela funktionen)
+# Bra kod: skriver bara över fältet om extraktionen faktiskt hittade ett värde, så en
+# tom/misslyckad extraktion aldrig råkar radera data som redan fanns på posten.
 def _fill_if_present(record: PersonRecord, field: str, value: Any) -> None:
     clean = str(value or "").strip()
     if clean:
@@ -245,6 +266,8 @@ def _normalize_assets(value: Any) -> list[str]:
 
 
 # 17 — rätt, rör inte (hela funktionen)
+# Bra kod: tolererar flera olika svarsformer från Firecrawl-API:t (data.web, data.results,
+# eller en ren lista) istället för att anta en enda struktur och krascha om den ändras.
 def _extract_search_items(response: dict[str, Any]) -> list[dict[str, Any]]:
     data = response.get("data", response)
     if isinstance(data, dict):

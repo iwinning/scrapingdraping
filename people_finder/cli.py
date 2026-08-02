@@ -23,6 +23,9 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--port", default=8765, type=int)
 
     add = subparsers.add_parser("add", help="Add a person record.")
+    # Bra kod: genererar --flaggorna från PERSON_FIELDS istället för att lista dem för
+    # hand — ett nytt fält i models.py (som "age") får automatiskt en CLI-flagga utan att
+    # den här filen behöver ändras.
     for field in PERSON_FIELDS:
         required = field == "name"
         add.add_argument(f"--{field.replace('_', '-')}", default="", required=required)
@@ -47,6 +50,10 @@ def build_parser() -> argparse.ArgumentParser:
     firecrawl.add_argument("--include-domain", action="append", default=[], help="Restrict results to a domain. Can be repeated.")
     # BEHÅLL — företag-only: choices=["company"] gör det omöjligt att köra firecrawl-search
     # med entity_type="person" via CLI:t.
+    # OBS – DENNA KONTROLL GÖR MOTSATSEN JUST NU: choices=["person"] gör att --entity-type
+    # bara accepterar "person" (default är också "person"), vilket tvingar varje
+    # firecrawl-search-körning till personläge och gör det omöjligt att be om
+    # entity_type=company via CLI:t. Ska vara choices=["company"], default="company".
     firecrawl.add_argument("--entity-type", choices=["person"], default="person", help="Firecrawl imports are currently person-only.")
     # 20 — rätt, rör inte
     firecrawl.add_argument("--import-results", action="store_true", help="Save results as company records instead of only previewing.")

@@ -8,6 +8,8 @@ from textwrap import wrap
 from .models import PERSON_FIELDS, PersonRecord
 
 
+# Bra kod: härleder exportkolumnerna från PERSON_FIELDS istället för att lista dem igen,
+# så CSV-exporten aldrig kan hamna i otakt med vilka fält som faktiskt finns på en post.
 EXPORT_FIELDS = ["id", *PERSON_FIELDS, "collected_at"]
 
 
@@ -61,6 +63,9 @@ def _escape_pdf_text(text: str) -> str:
     return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
 
+# Bra kod: skriver ett minimalt men giltigt PDF-dokument för hand (objekt, xref-tabell,
+# trailer) utan att dra in ett tredjeparts-PDF-bibliotek som beroende — håller projektet
+# lätt att installera/köra, på bekostnad av mer kod här.
 def _simple_pdf(lines: list[str]) -> bytes:
     """Create a small text PDF without third-party dependencies."""
 

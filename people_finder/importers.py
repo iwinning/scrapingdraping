@@ -13,12 +13,20 @@ def records_from_csv_text(csv_text: str) -> list[PersonRecord]:
     if not reader.fieldnames:
         return []
 
+    # VIKTIGT – BEHÅLL DENNA KONTROLL: kör validate_headers (SENSITIVE_FIELD_HINTS i
+    # policy.py) mot CSV-kolumnrubrikerna innan någon rad importeras. Tas denna bort kan
+    # CSV-filer med kolumner som personnummer/ssn/health/bank osv. importeras rakt in i
+    # databasen utan att blockeras. Den här kontrollen är korrekt konfigurerad idag och
+    # är helt oberoende av person/företag-buggen i policy.py:s validate_source_url.
     policy = validate_headers(list(reader.fieldnames))
     if not policy.allowed:
         raise ValueError(policy.message)
 
     records: list[PersonRecord] = []
     for row in reader:
+        # Bra kod: bygger raden från PERSON_FIELDS (samma DRY-mönster som i storage.py/
+        # cli.py) och hoppar tyst över rader utan namn istället för att krascha hela
+        # importen på en enda ofullständig rad.
         payload = {field: row.get(field, "") for field in PERSON_FIELDS}
         if payload["name"].strip():
             records.append(PersonRecord.from_mapping(payload))
